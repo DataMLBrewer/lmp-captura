@@ -101,6 +101,31 @@ def american(dec):
     return round((dec - 1) * 100) if dec >= 2 else round(-100 / (dec - 1))
 
 
+ODD_HOME, ODD_AWAY = 1, 3  # selecciones del moneyline: "1" = local, "2" = visita
+
+
+def side_competitors(ev, markets, odds, name, comps):
+    """Devuelve (competitorId local, competitorId visita).
+
+    El formato del nombre cambia por liga (MLB: "Visita @ Local"; LMP: "Local vs. Visita") y el
+    orden de competitorIds también, así que la fuente principal es el typeId del moneyline.
+    """
+    for mid in ev.get("marketIds", []):
+        m = markets.get(mid)
+        if m and m["typeId"] == MKT_MONEYLINE:
+            by_type = {odds[i]["typeId"]: odds[i].get("competitorId") for i in m.get("oddIds", []) if i in odds}
+            if by_type.get(ODD_HOME) and by_type.get(ODD_AWAY):
+                return by_type[ODD_HOME], by_type[ODD_AWAY]
+    cid_by_name = {v: k for k, v in comps.items()}
+    if " @ " in name:
+        away_n, home_n = [x.strip() for x in name.split(" @ ", 1)]
+    elif re.search(r"\s+vs\.?\s+", name):
+        home_n, away_n = [x.strip() for x in re.split(r"\s+vs\.?\s+", name, maxsplit=1)]
+    else:
+        return None, None
+    return cid_by_name.get(home_n), cid_by_name.get(away_n)
+
+
 def parse_events(data, champ_id, now):
     """Convierte la respuesta de Altenar en una lista de fotos, una por juego pre-partido."""
     odds = {o["id"]: o for o in data.get("odds", [])}
@@ -115,12 +140,11 @@ def parse_events(data, champ_id, now):
         if start <= now:  # ya empezó: esos momios son en vivo, no sirven
             continue
         name = ev.get("name", "")
-        if " @ " not in name:
-            problems.append(f"Nombre sin ' @ ': {name}")
+        home_cid, away_cid = side_competitors(ev, markets, odds, name, comps)
+        if home_cid is None or away_cid is None:
+            problems.append(f"No se pudo determinar local/visita: {name}")
             continue
-        away_name, home_name = [x.strip() for x in name.split(" @ ", 1)]
-        cid_by_name = {v: k for k, v in comps.items()}
-        home_cid, away_cid = cid_by_name.get(home_name), cid_by_name.get(away_name)
+        home_name, away_name = comps.get(home_cid, ""), comps.get(away_cid, "")
         home_id, away_id = team_id(home_name), team_id(away_name)
         if home_id is None or away_id is None:
             problems.append(f"Equipo sin mapear: {name}")
@@ -220,7 +244,7 @@ def main():
         s["ts_utc"] = now.isoformat()
         day = s.get("officialDate") or datetime.fromisoformat(s["start_utc"]).astimezone(CDMX).strftime("%Y-%m-%d")
         key = s.get("gamePk") or f"pd_{s['event_id']}"
-        if not s.get("gamePk"):
+        if not s.get("gamePk") and not os.environ.get("FIXTURE"):
             problems.append(f"Sin gamePk: {s['name']}")
         if os.environ.get("DRY_RUN"):
             print(json.dumps(s, ensure_ascii=False))

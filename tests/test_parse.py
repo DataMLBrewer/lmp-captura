@@ -69,6 +69,35 @@ def test_unknown_team_is_reported():
     assert any("sin mapear" in p for p in problems)
 
 
+FIX_LMP = os.path.join(os.path.dirname(__file__), "fixtures", "playdoit_lmp_2026-10-13.json")
+NOW_LMP = datetime(2026, 10, 13, 20, 40, tzinfo=timezone.utc)  # 14:40 CDMX, antes de las 20:15
+
+
+def test_real_lmp_response():
+    """Respuesta real del 13 oct: nombre 'Local vs. Visita', sin abridores ni Pago Anticipado."""
+    d = json.load(open(FIX_LMP, encoding="utf-8"))
+    snaps, problems = cp.parse_events(d, cp.LMP_CHAMP_FALLBACK, NOW_LMP)
+    assert problems == [], problems
+    assert len(snaps) == 1
+    s = snaps[0]
+    assert s["home"] == "Charros de Jalisco" and s["away"] == "Jaguares de Nayarit"
+    assert (s["home_id"], s["away_id"]) == (674, 6483)  # local según la MLB Stats API (gamePk 850571)
+    assert s["ml_home"] == 1.8696 and s["ml_away"] == 1.8696
+    assert s["p_home_novig"] == 0.5
+    assert s["rl_home_line"] == -1.5 and s["rl_home"] == 2.5455 and s["rl_away_line"] == 1.5
+    assert s["total_line"] == 11.5
+    assert "sp_home" not in s and s["pago_anticipado_home"] is None
+    assert s["mins_to_start"] == 335
+
+
+def test_vs_name_fallback_without_moneyline():
+    d = json.load(open(FIX_LMP, encoding="utf-8"))
+    d["events"][0]["marketIds"] = [m for m in d["events"][0]["marketIds"] if m != 1778307155]
+    snaps, problems = cp.parse_events(d, cp.LMP_CHAMP_FALLBACK, NOW_LMP)
+    assert snaps[0]["home"] == "Charros de Jalisco"
+    assert any("moneyline" in p for p in problems)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
