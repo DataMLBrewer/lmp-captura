@@ -1,0 +1,39 @@
+name: Captura momios LMP (Playdoit)
+
+# Horarios en UTC. CDMX = UTC-6 todo el año.
+# Las líneas abren ~12:00-13:00 CDMX y se mueven rápido (mercado local): la apertura es la foto clave.
+# Versión ligera (repo privado, cuida el cupo de Actions): 7 corridas al día, ~7 min diarios.
+#   12:45  apertura             -> 18:45 UTC
+#   13:30  primer movimiento    -> 19:30 UTC
+#   17:30  domingos y juegos temprano -> 23:30 UTC
+#   19:30, 20:00, 20:45, 21:00  cierres aproximados -> 01:30, 02:00, 02:45, 03:00 UTC (día siguiente)
+# Si el repo es PÚBLICO (minutos gratis), cambia a cada 15 min de 12:30 a 14:00 y cada 20 min de 16:00 a 21:40 CDMX:
+#   - cron: "30,45 18 * * *"
+#   - cron: "0,15,30,45 19 * * *"
+#   - cron: "*/20 22,23,0,1,2,3 * * *"
+on:
+  schedule:
+    - cron: "45 18 * * *"
+    - cron: "30 19 * * *"
+    - cron: "30 23 * * *"
+    - cron: "30 1 * * *"
+    - cron: "0 2 * * *"
+    - cron: "45 2 * * *"
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: captura-momios-lmp
+  cancel-in-progress: false
+
+jobs:
+  captura:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capturar momios
+        env:
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          FIREBASE_AUTH: ${{ secrets.FIREBASE_AUTH }}
+        run: python3 capture_playdoit.py
