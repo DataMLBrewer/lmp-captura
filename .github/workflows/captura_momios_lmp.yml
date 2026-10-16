@@ -1,4 +1,5 @@
 name: Captura momios LMP (Playdoit)
+# También captura los abridores probables desde api.lmp.mx (hoy y mañana) en cada corrida.
 
 # Horarios en UTC. CDMX = UTC-6 todo el año.
 # Las líneas abren ~12:00-13:00 CDMX y se mueven rápido (mercado local): la apertura es la foto clave.
@@ -32,7 +33,13 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Capturar momios
+      - name: Capturar abridores (api.lmp.mx)
+        env:
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          FIREBASE_AUTH: ${{ secrets.FIREBASE_AUTH }}
+        run: python3 capture_abridores.py
+      - name: Capturar momios (Playdoit)
+        if: always()
         env:
           FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
           FIREBASE_AUTH: ${{ secrets.FIREBASE_AUTH }}
