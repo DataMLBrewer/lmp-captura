@@ -19,6 +19,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -228,12 +229,40 @@ def firebase_put(path, payload):
     url = f"{db}/{path}.json" + (f"?auth={urllib.parse.quote(auth)}" if auth else "")
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="PUT",
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            r.read()
+    except urllib.error.HTTPError as e:
+        # Nunca imprime la URL completa: lleva la credencial
+        raise RuntimeError(f"Firebase respondió HTTP {e.code} al escribir {path}") from None
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"No se pudo conectar a Firebase: {e.reason}") from None
+
+
+def gh_error(msg):
+    """Anotación visible en la página pública del run (los logs piden iniciar sesión)."""
+    print(f"::error::{msg}")
+
+
+def gh_summary(lines):
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
 
 
 def main():
+    try:
+        run()
+    except Exception as e:  # noqa: BLE001
+        gh_error(f"{type(e).__name__}: {e}")
+        raise
+
+
+def run():
     now = datetime.now(timezone.utc)
+    if not os.environ.get("DRY_RUN") and not os.environ.get("FIREBASE_DB_URL"):
+        raise RuntimeError("Falta el secret FIREBASE_DB_URL (o está vacío) en Settings → Secrets → Actions")
     champ = int(os.environ.get("LMP_CHAMP_ID") or (LMP_CHAMP_FALLBACK if os.environ.get("FIXTURE") else lmp_champ_id()))
     data = fetch_events(champ)
     snaps, problems = parse_events(data, champ, now)
@@ -252,8 +281,14 @@ def main():
             firebase_put(f"lmp/momios/{day}/{key}/snapshots/{ts}", s)
 
     print(f"{now:%Y-%m-%d %H:%M} UTC | champ {champ} | juegos capturados: {len(snaps)}")
+    summary = [f"**{now:%Y-%m-%d %H:%M} UTC** · juegos capturados: {len(snaps)}", "",
+               "| Juego | Min. al inicio | ML local | ML visita | gamePk |", "|---|---|---|---|---|"]
+    summary += [f"| {s['away']} @ {s['home']} | {s['mins_to_start']} | {s.get('ml_home')} | {s.get('ml_away')} | {s.get('gamePk', '—')} |"
+                for s in snaps]
+    gh_summary(summary)
     for p in problems:
         print("PROBLEMA:", p)
+        gh_error(p)
     # Falla la corrida solo si hubo juegos y alguno no se pudo interpretar o empatar
     if snaps and problems:
         sys.exit(2)
