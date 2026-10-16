@@ -33,14 +33,18 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+      - name: Dependencias
+        run: pip install --quiet google-auth requests
       - name: Capturar abridores (api.lmp.mx)
         env:
           FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_AUTH: ${{ secrets.FIREBASE_AUTH }}
         run: python3 capture_abridores.py
       - name: Capturar momios (Playdoit)
         if: always()
         env:
           FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_AUTH: ${{ secrets.FIREBASE_AUTH }}
         run: python3 capture_playdoit.py

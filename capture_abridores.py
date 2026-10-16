@@ -9,7 +9,7 @@ la MLB Stats API y guarda en Firebase:
 
 Si el juego todavía no tiene gamePk en la API de la liga, se busca en el calendario de MLB por
 equipos y fecha. Variables de entorno: las mismas que capture_playdoit.py (FIREBASE_DB_URL,
-FIREBASE_AUTH, DRY_RUN, y FIXTURE para pruebas).
+FIREBASE_SERVICE_ACCOUNT, DRY_RUN, y FIXTURE para pruebas).
 """
 import json
 import os
@@ -117,8 +117,7 @@ def build_records(data, people, now):
 
 
 def firebase_get(path):
-    db, auth = os.environ["FIREBASE_DB_URL"].rstrip("/"), os.environ.get("FIREBASE_AUTH", "")
-    url = f"{db}/{path}.json" + (f"?auth={urllib.parse.quote(auth)}" if auth else "")
+    url = cp.firebase_url(path)
     try:
         with urllib.request.urlopen(url, timeout=20) as r:
             return json.loads(r.read().decode() or "null")

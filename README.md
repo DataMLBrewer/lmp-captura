@@ -19,16 +19,22 @@ El **cierre** de cada juego es la última foto antes de su inicio. Los juegos ya
 
 ## Puesta en marcha
 
-1. Sube esta carpeta a un repo nuevo (por ejemplo `DataMLBrewer/lmp-captura`).
-2. En Settings → Secrets and variables → Actions, crea `FIREBASE_DB_URL` y `FIREBASE_AUTH` con los mismos valores que usa V3.
-3. En la pestaña Actions, corre el workflow una vez a mano (Run workflow) para probar.
+1. Usa el mismo proyecto de Firebase que V3. Todo lo de LMP se escribe bajo `/lmp/`.
+2. En Firebase Console → ⚙️ Project settings → **Service accounts** → **Generate new private key** se descarga un JSON.
+3. En el repo, Settings → Secrets and variables → Actions → New repository secret:
+   - `FIREBASE_DB_URL`: la URL de la Realtime Database (por ejemplo `https://proyecto-default-rtdb.firebaseio.com`).
+   - `FIREBASE_SERVICE_ACCOUNT`: el contenido COMPLETO del JSON, desde `{` hasta `}`.
+4. En Actions corre el workflow una vez a mano (Run workflow). Si falla, el motivo aparece en *Annotations*.
 
-**Cupo de Actions:** la versión ligera usa ~7 min al día (~560 en la temporada). Si el repo es público, los minutos son gratis y conviene el horario denso que está comentado en el workflow. El repo no contiene nada del modelo, solo la captura.
+`FIREBASE_AUTH` (database secret heredado) solo se usa como respaldo si no hay cuenta de servicio. Firebase lo marca como obsoleto.
+
+**Horario:** el cron de GitHub se retrasa de 3 a 5 horas en la práctica. Hay que disparar el workflow desde un cron externo (`workflow_dispatch`).
 
 ## Pruebas
 
 ```
 python3 tests/test_parse.py
+python3 tests/test_abridores.py
 DRY_RUN=1 python3 capture_playdoit.py   # consulta la API real e imprime sin escribir
 ```
 

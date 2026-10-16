@@ -7,7 +7,8 @@ y la guarda en /lmp/momios/{fecha}/{gamePk}/snapshots/{ts}. El cierre de cada ju
 
 Variables de entorno:
   FIREBASE_DB_URL   p. ej. https://tu-proyecto-default-rtdb.firebaseio.com
-  FIREBASE_AUTH     credencial para ?auth= (la misma que usa V3)
+  FIREBASE_SERVICE_ACCOUNT  JSON de una cuenta de servicio de Firebase (método recomendado; requiere google-auth)
+  FIREBASE_AUTH     database secret heredado para ?auth= (obsoleto; solo como respaldo)
   DRY_RUN=1         imprime las fotos en vez de escribir en Firebase
   FIXTURE=archivo   usa un JSON guardado en vez de llamar a la API (pruebas)
 
@@ -224,9 +225,43 @@ def attach_gamepk(snaps):
                 break
 
 
+_TOKEN = {}
+
+
+def auth_query():
+    """Parámetro de autenticación para la REST API de Realtime Database.
+
+    Preferido: cuenta de servicio (FIREBASE_SERVICE_ACCOUNT) -> token OAuth2 (?access_token=).
+    Respaldo: database secret heredado (FIREBASE_AUTH) -> ?auth=.
+    """
+    sa = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "").strip()
+    if sa:
+        if "tok" not in _TOKEN:
+            from google.oauth2 import service_account          # pip install google-auth requests
+            import google.auth.transport.requests as gtr
+            try:
+                info = json.loads(sa)
+            except json.JSONDecodeError:
+                raise RuntimeError("FIREBASE_SERVICE_ACCOUNT no es un JSON válido: pega el archivo completo") from None
+            creds = service_account.Credentials.from_service_account_info(info, scopes=[
+                "https://www.googleapis.com/auth/firebase.database",
+                "https://www.googleapis.com/auth/userinfo.email"])
+            try:
+                creds.refresh(gtr.Request())
+            except Exception as e:  # noqa: BLE001
+                raise RuntimeError(f"No se pudo obtener token de la cuenta de servicio {info.get('client_email')}: {type(e).__name__}") from None
+            _TOKEN["tok"] = creds.token
+        return "?access_token=" + urllib.parse.quote(_TOKEN["tok"])
+    legacy = os.environ.get("FIREBASE_AUTH", "")
+    return f"?auth={urllib.parse.quote(legacy)}" if legacy else ""
+
+
+def firebase_url(path):
+    return f"{os.environ['FIREBASE_DB_URL'].rstrip('/')}/{path}.json{auth_query()}"
+
+
 def firebase_put(path, payload):
-    db, auth = os.environ["FIREBASE_DB_URL"].rstrip("/"), os.environ.get("FIREBASE_AUTH", "")
-    url = f"{db}/{path}.json" + (f"?auth={urllib.parse.quote(auth)}" if auth else "")
+    url = firebase_url(path)
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="PUT",
                                  headers={"Content-Type": "application/json"})
     try:
